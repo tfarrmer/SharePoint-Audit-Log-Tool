@@ -1,0 +1,17 @@
+# Input data exports (contain sensitive org data)
+*.csv
+Purview/
+
+# Output reports
+M365_Audit_Report.xlsx
+~$*.xlsx
+
+# Microsoft export files
+Office365ActiveUserDetail*
+SharePointSiteUsageDetail*
+
+# Installers
+*.exe
+
+# Claude Code session files
+.claude/
