@@ -90,7 +90,7 @@ Purview times out on large date ranges. The tool is designed to accept multiple 
 
 - No API keys or credentials in this repository
 - All CSV/XLSX data files are excluded via `.gitignore`
-- Phase 2 credentials will be stored in a `.env` file (also excluded from git)
+
 
 ## Author
 
