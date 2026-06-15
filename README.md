@@ -85,12 +85,6 @@ TOOL_GUIDE.md           # End-user instructions for running the tool
 
 Purview times out on large date ranges. The tool is designed to accept multiple monthly CSV exports from the `purview/` folder, which are combined automatically at runtime.
 
-## Phase 2 (Planned)
-
-- Replace manual exports with Microsoft Graph API (`Reports.Read.All`)
-- Replace Purview CSV exports with Office 365 Management Activity API
-- Add tkinter GUI and package as standalone `.exe`
-- Schedule automated runs for recurring reports
 
 ## Security Notes
 
@@ -100,4 +94,4 @@ Purview times out on large date ranges. The tool is designed to accept multiple 
 
 ## Author
 
-Travis Farmer — IT Intern, Axion BioSystems (Class of 2028, Georgia State University, Cybersecurity)
+Travis Farmer - Comp Sci Student @ Georgia State University and IT Intern @ Axion BioSystems
