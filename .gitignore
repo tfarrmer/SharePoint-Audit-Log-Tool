@@ -1,3 +1,7 @@
+# Environment variables (contain secrets — never commit)
+.env
+.env.*
+
 # Input data exports (contain sensitive org data)
 *.csv
 Purview/
