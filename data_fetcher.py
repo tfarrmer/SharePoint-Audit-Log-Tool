@@ -149,3 +149,36 @@ def fetch_audit_records(token, query_id, search_name):
 
     print(f"  Total records for '{search_name}': {len(all_records)}")
     return all_records
+
+
+
+def fetch_purview_audit_logs(token, months_back=6):
+    """Run monthly audit searches and combine all results."""
+    print("\nFetching Purview audit logs (monthly intervals)...")
+
+    end_date = datetime.utcnow()
+    all_records = []
+
+    searches = []
+    for i in range(months_back):
+        month_end = end_date - timedelta(days=30 * i)
+        month_start = end_date - timedelta(days=30 * (i + 1))
+        search_name = f"{month_start.strftime('%b %d')} - {month_end.strftime('%b %d')} SharePoint"
+
+        query_id = create_audit_search(token, month_start, month_end, search_name)
+        if query_id:
+            searches.append((query_id, search_name))
+
+    if not searches:
+        print("ERROR: No audit searches were created successfully.")
+        return []
+
+    for query_id, search_name in searches:
+        print(f"\n  Waiting for '{search_name}'...")
+        success = poll_audit_search(token, query_id, search_name)
+        if success:
+            records = fetch_audit_records(token, query_id, search_name)
+            all_records.extend(records)
+
+    print(f"\nTotal Purview records fetched: {len(all_records)}")
+    return all_records
