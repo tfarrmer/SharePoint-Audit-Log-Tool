@@ -121,3 +121,31 @@ def poll_audit_search(token, query_id, search_name, poll_interval=30, max_wait=3
 
     print(f"  Search '{search_name}' timed out after {max_wait}s")
     return False
+
+
+
+def fetch_audit_records(token, query_id, search_name):
+    """Fetch all records from a completed audit search."""
+    url = f"{GRAPH_BASE}/beta/security/auditLog/queries/{query_id}/records"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    all_records = []
+    page = 1
+
+    while url:
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            print(f"  ERROR: Failed to fetch records for '{search_name}' ({response.status_code})")
+            print(f"  {response.text[:500]}")
+            break
+
+        data = response.json()
+        records = data.get("value", [])
+        all_records.extend(records)
+        print(f"  Page {page}: fetched {len(records)} records (total: {len(all_records)})")
+
+        url = data.get("@odata.nextLink", None)
+        page += 1
+
+    print(f"  Total records for '{search_name}': {len(all_records)}")
+    return all_records
