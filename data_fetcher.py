@@ -61,7 +61,7 @@ def fetch_sharepoint_site_usage(token):
     return fetch_report(token, "getSharePointSiteUsageDetail")
 
 
-
+#Purview Audit Logs
 def create_audit_search(token, start_date, end_date, search_name):
     """Create a Purview audit log search query."""
     url = f"{GRAPH_BASE}/beta/security/auditLog/queries"
@@ -158,7 +158,7 @@ def fetch_purview_audit_logs(token, months_back=6):
 
     end_date = datetime.utcnow()
     all_records = []
-
+# create the monthly searches
     searches = []
     for i in range(months_back):
         month_end = end_date - timedelta(days=30 * i)
@@ -182,3 +182,30 @@ def fetch_purview_audit_logs(token, months_back=6):
 
     print(f"\nTotal Purview records fetched: {len(all_records)}")
     return all_records
+
+
+#fetch everything
+def fetch_all():
+    """Authenticate and fetch all three data sources."""
+    print("Authenticating...")
+    token = get_access_token()
+    print("Authentication successful!\n")
+
+    print("Fetching M365 reports...")
+    services = fetch_active_user_detail(token)
+    sp_storage = fetch_sharepoint_site_usage(token)
+
+    if services is None or sp_storage is None:
+        print("ERROR: Failed to fetch one or more reports.")
+        exit(1)
+
+    audit_records = fetch_purview_audit_logs(token)
+
+    return services, sp_storage, audit_records
+
+if __name__ == "__main__":
+    services, sp_storage, audit_records = fetch_all()
+    print(f"\n=== Summary ===")
+    print(f"Active User Detail: {len(services)} rows")
+    print(f"SharePoint Site Usage: {len(sp_storage)} rows")
+    print(f"Purview Audit Records: {len(audit_records)} records")
