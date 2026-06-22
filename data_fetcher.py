@@ -178,6 +178,7 @@ def fetch_purview_audit_logs(token, months_back=6):
         query_id = create_audit_search(token, month_start, month_end, search_name)
         if query_id:
             searches.append((query_id, search_name))
+        time.sleep(15)
 
     if not searches:
         print("ERROR: No audit searches were created successfully.")
