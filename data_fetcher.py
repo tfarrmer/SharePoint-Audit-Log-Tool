@@ -189,12 +189,43 @@ def fetch_purview_audit_logs(token, months_back=6):
         print("ERROR: No audit searches were created successfully.")
         return []
 
-    for query_id, search_name in searches:
-        print(f"\n  Waiting for '{search_name}'...")
-        success = poll_audit_search(token, query_id, search_name)
-        if success:
-            records = fetch_audit_records(token, query_id, search_name)
-            all_records.extend(records)
+    # Poll all searches in parallel — check each one every 30s until all complete
+    print("\n  Polling all searches simultaneously...")
+    pending = list(searches)
+    completed = []
+
+    while pending:
+        still_pending = []
+        for query_id, search_name in pending:
+            url = f"{GRAPH_BASE}/beta/security/auditLog/queries/{query_id}"
+            response = _api("get", url)
+
+            if response.status_code != 200:
+                print(f"  ERROR: Failed to check '{search_name}' ({response.status_code})")
+                still_pending.append((query_id, search_name))
+                continue
+
+            status = response.json().get("status", "")
+
+            if status == "succeeded":
+                print(f"  ✓ '{search_name}' completed")
+                completed.append((query_id, search_name))
+            elif status in ("failed", "cancelled"):
+                print(f"  ✗ '{search_name}' {status} — skipping")
+            else:
+                print(f"  '{search_name}' status: {status}")
+                still_pending.append((query_id, search_name))
+
+        pending = still_pending
+        if pending:
+            print(f"  {len(pending)} searches still running — waiting 30s...")
+            time.sleep(30)
+
+    # Fetch results from all completed searches
+    for query_id, search_name in completed:
+        print(f"\n  Fetching records for '{search_name}'...")
+        records = fetch_audit_records(token, query_id, search_name)
+        all_records.extend(records)
 
     print(f"\nTotal Purview records fetched: {len(all_records)}")
     return all_records
