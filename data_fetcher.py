@@ -4,7 +4,7 @@ import time
 import requests
 import pandas as pd
 from io import StringIO
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,6 +14,7 @@ CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 
 GRAPH_BASE = "https://graph.microsoft.com"
+_current_token = None
 
 
 #Authentication function, sends credentials to get an access token and if fails, it prints the error message and exits.
@@ -34,12 +35,27 @@ def get_access_token():
     return response.json()["access_token"]
 
 
+def _api(method, url, **kwargs):
+    """Make an authenticated API request, refreshing the token once on 401."""
+    global _current_token
+    if _current_token is None:
+        _current_token = get_access_token()
+    headers = kwargs.pop("headers", {})
+    headers["Authorization"] = f"Bearer {_current_token}"
+    response = getattr(requests, method)(url, headers=headers, **kwargs)
+    if response.status_code == 401:
+        print("  Token expired, refreshing...")
+        _current_token = get_access_token()
+        headers["Authorization"] = f"Bearer {_current_token}"
+        response = getattr(requests, method)(url, headers=headers, **kwargs)
+    return response
+
+
 #Report function: gives a report name and it calls the Graph API, gets back CSV text, and converts it to a pandas DataFrame
 def fetch_report(token, report_name, period="D180"):
     url = f"{GRAPH_BASE}/v1.0/reports/{report_name}(period='{period}')"
-    headers = {"Authorization": f"Bearer {token}"}
 
-    response = requests.get(url, headers=headers)
+    response = _api("get", url)
 
     if response.status_code != 200:
         print(f"ERROR: Failed to fetch {report_name} ({response.status_code})")
@@ -65,10 +81,6 @@ def fetch_sharepoint_site_usage(token):
 def create_audit_search(token, start_date, end_date, search_name):
     """Create a Purview audit log search query."""
     url = f"{GRAPH_BASE}/beta/security/auditLog/queries"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
     body = {
         "displayName": search_name,
         "filterStartDateTime": start_date.strftime("%Y-%m-%dT00:00:00Z"),
@@ -82,7 +94,7 @@ def create_audit_search(token, start_date, end_date, search_name):
         ]
     }
 
-    response = requests.post(url, headers=headers, json=body)
+    response = _api("post", url, headers={"Content-Type": "application/json"}, json=body)
 
     if response.status_code in (200, 201):
         query = response.json()
@@ -94,14 +106,13 @@ def create_audit_search(token, start_date, end_date, search_name):
         return None
     
 
-def poll_audit_search(token, query_id, search_name, poll_interval=30, max_wait=3600):
+def poll_audit_search(token, query_id, search_name, poll_interval=30, max_wait=10800):
     """Poll a Purview audit search until it completes."""
     url = f"{GRAPH_BASE}/beta/security/auditLog/queries/{query_id}"
-    headers = {"Authorization": f"Bearer {token}"}
 
     elapsed = 0
     while elapsed < max_wait:
-        response = requests.get(url, headers=headers)
+        response = _api("get", url)
         if response.status_code != 200:
             print(f"  ERROR: Failed to check status for '{search_name}' ({response.status_code})")
             return False
@@ -127,13 +138,12 @@ def poll_audit_search(token, query_id, search_name, poll_interval=30, max_wait=3
 def fetch_audit_records(token, query_id, search_name):
     """Fetch all records from a completed audit search."""
     url = f"{GRAPH_BASE}/beta/security/auditLog/queries/{query_id}/records"
-    headers = {"Authorization": f"Bearer {token}"}
 
     all_records = []
     page = 1
 
     while url:
-        response = requests.get(url, headers=headers)
+        response = _api("get", url)
         if response.status_code != 200:
             print(f"  ERROR: Failed to fetch records for '{search_name}' ({response.status_code})")
             print(f"  {response.text[:500]}")
