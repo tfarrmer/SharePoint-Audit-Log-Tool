@@ -166,7 +166,7 @@ def fetch_purview_audit_logs(token, months_back=6):
     """Run monthly audit searches and combine all results."""
     print("\nFetching Purview audit logs (monthly intervals)...")
 
-    end_date = datetime.utcnow()
+    end_date = datetime.now(tz=timezone.utc)
     all_records = []
 # create the monthly searches
     searches = []
