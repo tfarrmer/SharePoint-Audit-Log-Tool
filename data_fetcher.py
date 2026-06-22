@@ -93,8 +93,13 @@ def create_audit_search(token, start_date, end_date, search_name):
             "FileSyncUploadedFull", "FileVersionsAllDeleted"
         ]
     }
-
+for attempt in range(3):
     response = _api("post", url, headers={"Content-Type": "application/json"}, json=body)
+    if response.status_code in (429, 504):
+        print(f" Rate limited or timeout ({response.status_code})", retrying in 60s... (attempt {attempt + 1}/3)")
+        time.sleep(60)
+        continue
+    break
 
     if response.status_code in (200, 201):
         query = response.json()
