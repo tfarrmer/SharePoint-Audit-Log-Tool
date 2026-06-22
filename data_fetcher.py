@@ -168,7 +168,7 @@ def fetch_audit_records(token, query_id, search_name):
 
 
 
-def fetch_purview_audit_logs(token, months_back=6):
+def fetch_purview_audit_logs(token, months_back=1):
     """Run monthly audit searches and combine all results."""
     print("\nFetching Purview audit logs (monthly intervals)...")
 
