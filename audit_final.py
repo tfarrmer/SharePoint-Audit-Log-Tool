@@ -75,33 +75,44 @@ if not sp_storage_file:
     print("Export it from admin.microsoft.com → Reports → Usage → SharePoint → Site Usage tab → Export")
     exit(1)
 
-print("Reading M365 exports...")
-print(f"  Using: {os.path.basename(services_file)}")
-print(f"  Using: {os.path.basename(sp_storage_file)}")
-services = read_auto(services_file)
-sp_storage = read_auto(sp_storage_file)
-
 # Convert storage bytes to GB
 if "Storage Used (Byte)" in sp_storage.columns:
     sp_storage["Storage Used (GB)"] = (sp_storage["Storage Used (Byte)"] / (1024**3)).round(2)
     sp_storage["Storage Allocated (GB)"] = (sp_storage["Storage Allocated (Byte)"] / (1024**3)).round(2)
 
-# --- Load and combine all Purview CSVs ---
-print("Reading Purview audit logs...")
-purview_files = glob.glob(os.path.join(PURVIEW_FOLDER, "*.csv"))
-if not purview_files:
-    print(f"ERROR: No CSV files found in '{PURVIEW_FOLDER}/' folder.")
-    print("Create a 'purview' subfolder and place your Purview export CSVs inside it.")
-    exit(1)
-
-purview_dfs = []
-for f in purview_files:
-    df = pd.read_csv(f)
-    purview_dfs.append(df)
-    print(f"  Loaded {os.path.basename(f)}: {len(df)} rows")
-
-purview_raw = pd.concat(purview_dfs, ignore_index=True)
-print(f"  Total Purview records: {len(purview_raw)}")
+# --- Build purview_raw from either API records or CSV files ---
+if api_mode:
+    print("\nParsing API audit records...")
+    if not audit_records_raw:
+        print("WARNING: No Purview records returned from API.")
+        purview_raw = pd.DataFrame(columns=["Operation", "CreationDate", "UserId", "AuditData"])
+    else:
+        rows = []
+        for record in audit_records_raw:
+            audit_data = record.get("auditData", record.get("AuditData", "{}"))
+            if isinstance(audit_data, dict):
+                audit_data = json.dumps(audit_data)
+            rows.append({
+                "Operation": record.get("operation", record.get("Operation", "")),
+                "CreationDate": record.get("createdDateTime", record.get("CreationDate", "")),
+                "UserId": record.get("userPrincipalName", record.get("UserId", "")),
+                "AuditData": audit_data
+            })
+        purview_raw = pd.DataFrame(rows)
+    print(f"  Total API records: {len(purview_raw)}")
+else:
+    print("Reading Purview audit logs...")
+    purview_files = glob.glob(os.path.join(PURVIEW_FOLDER, "*.csv"))
+    if not purview_files:
+        print(f"ERROR: No CSV files found in '{PURVIEW_FOLDER}/' folder.")
+        exit(1)
+    purview_dfs = []
+    for f in purview_files:
+        df = pd.read_csv(f)
+        purview_dfs.append(df)
+        print(f"  Loaded {os.path.basename(f)}: {len(df)} rows")
+    purview_raw = pd.concat(purview_dfs, ignore_index=True)
+    print(f"  Total Purview records: {len(purview_raw)}")
 
 # --- Parse AuditData JSON to extract file details ---
 print("Parsing audit log details...")
