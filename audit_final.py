@@ -7,17 +7,50 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 # ============================================================
-# Place your exported files in the same folder as this script
-# Put all Purview CSV exports in a subfolder called "purview"
-# ============================================================
 SERVICES_PREFIX = "Office365ActiveUserDetail"
 SP_STORAGE_PREFIX = "SharePointSiteUsageDetail"
 PURVIEW_FOLDER = "purview"
-
 OUTPUT_FILE = "M365_Audit_Report.xlsx"
 # ============================================================
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_FILE = os.path.join(SCRIPT_DIR, ".env")
+
+def find_file_by_prefix(prefix):
+    for fname in os.listdir(SCRIPT_DIR):
+        if fname.startswith(prefix) and fname.lower().endswith((".xlsx", ".csv")):
+            return os.path.join(SCRIPT_DIR, fname)
+    return None
+
+def read_auto(filepath):
+    if filepath.lower().endswith(".csv"):
+        return pd.read_csv(filepath)
+    return pd.read_excel(filepath)
+
+# --- Detect mode ---
+if os.path.exists(ENV_FILE):
+    print("Credentials found — running in automated mode...")
+    from data_fetcher import fetch_all
+    services, sp_storage, audit_records_raw = fetch_all()
+    api_mode = True
+else:
+    print("No credentials found — running in manual mode...")
+    api_mode = False
+
+    services_file = find_file_by_prefix(SERVICES_PREFIX)
+    if not services_file:
+        print(f"ERROR: Could not find a file starting with '{SERVICES_PREFIX}' in the script directory.")
+        exit(1)
+
+    sp_storage_file = find_file_by_prefix(SP_STORAGE_PREFIX)
+    if not sp_storage_file:
+        print(f"ERROR: Could not find a file starting with '{SP_STORAGE_PREFIX}' in the script directory.")
+        exit(1)
+
+    print(f"  Using: {os.path.basename(services_file)}")
+    print(f"  Using: {os.path.basename(sp_storage_file)}")
+    services = read_auto(services_file)
+    sp_storage = read_auto(sp_storage_file)
 
 def find_file_by_prefix(prefix):
     for fname in os.listdir(SCRIPT_DIR):
