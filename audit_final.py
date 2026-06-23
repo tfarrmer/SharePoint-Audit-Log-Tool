@@ -14,6 +14,8 @@ OUTPUT_FILE = "M365_Audit_Report.xlsx"
 # ============================================================
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+from dotenv import load_dotenv
+load_dotenv()
 ENV_FILE = os.path.join(SCRIPT_DIR, ".env")
 
 def find_file_by_prefix(prefix):
