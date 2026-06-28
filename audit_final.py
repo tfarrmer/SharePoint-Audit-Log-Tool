@@ -1,74 +1,39 @@
 import pandas as pd
 import json
-import os
-import glob
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-
-# ============================================================
-# Place your exported files in the same folder as this script
-# Put all Purview CSV exports in a subfolder called "purview"
-# ============================================================
-SERVICES_PREFIX = "Office365ActiveUserDetail"
-SP_STORAGE_PREFIX = "SharePointSiteUsageDetail"
-PURVIEW_FOLDER = "purview"
+from data_fetcher import fetch_all
 
 OUTPUT_FILE = "M365_Audit_Report.xlsx"
-# ============================================================
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-
-def find_file_by_prefix(prefix):
-    for fname in os.listdir(SCRIPT_DIR):
-        if fname.startswith(prefix) and fname.lower().endswith((".xlsx", ".csv")):
-            return os.path.join(SCRIPT_DIR, fname)
-    return None
-
-def read_auto(filepath):
-    if filepath.lower().endswith(".csv"):
-        return pd.read_csv(filepath)
-    return pd.read_excel(filepath)
-
-services_file = find_file_by_prefix(SERVICES_PREFIX)
-if not services_file:
-    print(f"ERROR: Could not find a file starting with '{SERVICES_PREFIX}' in the script directory.")
-    print("Export it from admin.microsoft.com → Reports → Usage → Microsoft 365 Services → Active Users tab → Export")
-    exit(1)
-
-sp_storage_file = find_file_by_prefix(SP_STORAGE_PREFIX)
-if not sp_storage_file:
-    print(f"ERROR: Could not find a file starting with '{SP_STORAGE_PREFIX}' in the script directory.")
-    print("Export it from admin.microsoft.com → Reports → Usage → SharePoint → Site Usage tab → Export")
-    exit(1)
-
-print("Reading M365 exports...")
-print(f"  Using: {os.path.basename(services_file)}")
-print(f"  Using: {os.path.basename(sp_storage_file)}")
-services = read_auto(services_file)
-sp_storage = read_auto(sp_storage_file)
+print("Fetching data from Microsoft Graph API...")
+services, sp_storage, audit_records_raw = fetch_all()
 
 # Convert storage bytes to GB
 if "Storage Used (Byte)" in sp_storage.columns:
     sp_storage["Storage Used (GB)"] = (sp_storage["Storage Used (Byte)"] / (1024**3)).round(2)
     sp_storage["Storage Allocated (GB)"] = (sp_storage["Storage Allocated (Byte)"] / (1024**3)).round(2)
 
-# --- Load and combine all Purview CSVs ---
-print("Reading Purview audit logs...")
-purview_files = glob.glob(os.path.join(PURVIEW_FOLDER, "*.csv"))
-if not purview_files:
-    print(f"ERROR: No CSV files found in '{PURVIEW_FOLDER}/' folder.")
-    print("Create a 'purview' subfolder and place your Purview export CSVs inside it.")
-    exit(1)
-
-purview_dfs = []
-for f in purview_files:
-    df = pd.read_csv(f)
-    purview_dfs.append(df)
-    print(f"  Loaded {os.path.basename(f)}: {len(df)} rows")
-
-purview_raw = pd.concat(purview_dfs, ignore_index=True)
-print(f"  Total Purview records: {len(purview_raw)}")
+# --- Build purview_raw from API records ---
+print("\nParsing API audit records...")
+if not audit_records_raw:
+    print("WARNING: No Purview records returned from API.")
+    purview_raw = pd.DataFrame(columns=["Operation", "CreationDate", "UserId", "AuditData"])
+else:
+    rows = []
+    for record in audit_records_raw:
+        audit_data = record.get("auditData", record.get("AuditData", "{}"))
+        if isinstance(audit_data, dict):
+            audit_data = json.dumps(audit_data)
+        rows.append({
+            "Operation": record.get("operation", record.get("Operation", "")),
+            "CreationDate": record.get("createdDateTime", record.get("CreationDate", "")),
+            "UserId": record.get("userPrincipalName", record.get("UserId", "")),
+            "AuditData": audit_data
+        })
+    purview_raw = pd.DataFrame(rows)
+print(f"  Total API records: {len(purview_raw)}")
 
 # --- Parse AuditData JSON to extract file details ---
 print("Parsing audit log details...")
