@@ -1,112 +1,78 @@
-# Tool User Guide
+# M365 SharePoint Audit Tool — User Guide
 
 ## What This Tool Does
 
-This tool takes data exported from the Microsoft 365 admin center and Microsoft Purview, combines it, and generates a single Excel report with three tabs:
+This tool automatically pulls data from Microsoft 365 via API and generates a single Excel report with three tabs:
 
-- **User Summary** — shows every licensed user, how many files they've uploaded, modified, and deleted on SharePoint, and their total upload volume
-- **File Activity Log** — a detailed log of every file upload, modification, deletion, move, and rename across SharePoint over the past 6 months
+- **User Summary** — shows every licensed user, how many files they've uploaded, modified, and deleted on SharePoint, and their total upload volume over the past 30 days
+- **File Activity Log** — a detailed log of every file upload, modification, deletion, move, and rename across SharePoint over the past 30 days
 - **All Licensed Users** — shows every user's Microsoft 365 license assignments for SharePoint and Teams, along with their last activity dates
 
----
-
-## What You Need Before Running the Tool
-
-### Software (one-time setup)
-
-1. **Python 3.10 or higher** — download from https://www.python.org/downloads/
-   - During installation, check "Add Python to environment variables" (also called "Add to PATH")
-2. **Required Python libraries** — open a terminal and run:
-   ```
-   python -m pip install pandas openpyxl
-   ```
-3. **VS Code** or any other terminal, but VS Code is easiest to use.
-
-### Data Exports (every time you run the tool)
-
-You need three sets of data. All are exported from Microsoft web portals.
-
-**Export 1 — Office 365 Active User Detail**
-- Go to https://admin.microsoft.com
-- Navigate to Reports → Usage
-- Click "View more" under "Active users — Microsoft 365 Services" (left card)
-- Click the "Active Users" tab
-- Click Export
-- This file will be named something like `Office365ActiveUserDetail6_15_2026 1_53_22 PM.xlsx`
-
-**Export 2 — SharePoint Site Usage Detail**
-- Go to https://admin.microsoft.com
-- Navigate to Reports → Usage → SharePoint site usage
-- Click the Export button at the bottom left of the page (not the individual chart exports)
-- This file will be named something like `SharePointSiteUsageDetail6_15_2026 1_34_35 PM.csv`
-
-**Export 3 — Purview Audit Logs**
-- Go to https://compliance.microsoft.com
-- Navigate to Audit
-- Create searches in 1-month intervals over the past 6 months:
-  - Dec 12 – Jan 12
-  - Jan 12 – Feb 12
-  - Feb 12 – Mar 12
-  - Mar 12 – Apr 12
-  - Apr 12 – May 12
-  - May 12 – Jun 12
-- For each search, set the Workload filter to "SharePoint"
-- Once each search completes, export the results as a CSV
-- You will have 6 CSV files
-
-**Why 1-month intervals?** Purview times out on large date ranges. Breaking into monthly chunks ensures each search completes successfully.
+No manual exports required. The tool pulls everything automatically.
 
 ---
 
-## Folder Setup
+## One-Time Setup
 
-Place everything in one folder like this:
+### 1. Install Python
 
+Download from https://www.python.org/downloads/ and install Python 3.10 or higher.
+During installation, check **"Add Python to environment variables"**.
+
+### 2. Install required libraries
+
+Open a terminal and run:
 ```
-Scripts/
-├── audit_final.py                              ← the tool
-├── Office365ActiveUserDetail6_15_2026...xlsx   ← Export 1 (any name starting with Office365ActiveUserDetail)
-├── SharePointSiteUsageDetail6_15_2026...csv    ← Export 2 (any name starting with SharePointSiteUsageDetail)
-└── purview/                                    ← create this folder
-    ├── dec-jan.csv                             ← Export 3 (all Purview CSVs go here)
-    ├── jan-feb.csv
-    ├── feb-mar.csv
-    ├── mar-apr.csv
-    ├── apr-may.csv
-    └── may-jun.csv
+python -m pip install pandas openpyxl requests python-dotenv
 ```
 
-**You do not need to rename any files.** The tool auto-detects files by their prefix. As long as the file name starts with `Office365ActiveUserDetail` or `SharePointSiteUsageDetail`, the tool will find it. Both `.csv` and `.xlsx` formats are supported.
+### 3. Create your credentials file
 
-The Purview CSVs can have any name — the tool reads every `.csv` file inside the `purview` folder.
+Create a file called `.env` in the same folder as the tool with the following:
+
+```
+TENANT_ID=your-tenant-id
+CLIENT_ID=your-client-id
+CLIENT_SECRET=your-client-secret
+```
+
+Your IT administrator can provide these values from the app registration in Microsoft Entra ID. Each person running the tool should have their own Client Secret — contact your administrator to generate one.
 
 ---
 
 ## How to Run the Tool
 
-1. Open a terminal in the Scripts folder
-   
-2. Run the command:
+1. Open a terminal in the project folder
+2. Run:
    ```
    python audit_final.py
    ```
-3. The tool will print its progress:
+3. The tool will print its progress as it runs:
    ```
-   Reading M365 exports...
-   Found: Office365ActiveUserDetail6_15_2026 1_53_22 PM.xlsx
-   Found: SharePointSiteUsageDetail6_15_2026 1_34_35 PM.csv
-   Reading Purview audit logs...
-     Loaded dec-jan.csv: 50000 rows
-     Loaded jan-feb.csv: 50000 rows
-     ...
-   Parsing audit log details...
+   Authenticating...
+   Authentication successful!
+
+   Fetching M365 reports...
+     Fetched getOffice365ActiveUserDetail: 271 rows
+     Fetched getSharePointSiteUsageDetail: 222 rows
+
+   Fetching Purview audit logs (monthly intervals)...
+     Created search: May 29 - Jun 28 SharePoint
+     Polling all searches simultaneously...
+     ✓ 'May 29 - Jun 28 SharePoint' completed
+     Fetching records...
+
+   Parsing API audit records...
    Building User Summary tab...
    Building Licensed Users tab...
    Writing report...
    Formatting...
+
    Done! Report saved to: M365_Audit_Report.xlsx
    ```
 4. Open `M365_Audit_Report.xlsx` in Excel — your report is ready
+
+The tool typically takes **1–2 hours** to complete due to the time required for Purview audit log searches to process on Microsoft's servers.
 
 ---
 
@@ -122,13 +88,13 @@ Each row is one user. Sorted by heaviest uploaders at the top.
 | Email | Their Microsoft 365 email address |
 | Has SharePoint License | Whether they are licensed for SharePoint |
 | SharePoint Last Active | The last date they used SharePoint |
-| Files Uploaded | Number of files they uploaded in the past 6 months |
-| Files Modified | Number of files they modified in the past 6 months |
-| Files Deleted | Number of files they deleted in the past 6 months |
+| Files Uploaded | Number of files they uploaded in the past 30 days |
+| Files Modified | Number of files they modified in the past 30 days |
+| Files Deleted | Number of files they deleted in the past 30 days |
 | Total Actions | Total file operations (uploads + modifications + deletions + moves + renames) |
 | Total Upload Volume (MB) | Total size of files they uploaded/modified, in megabytes |
 | Sites Owned | Number of SharePoint sites they own |
-| SharePoint Storage (GB) | Storage consumed by sites they own (not personal usage) |
+| SharePoint Storage (GB) | Storage consumed by sites they own |
 | Total Files | Total file count across sites they own |
 
 ### Tab 2 — File Activity Log
@@ -164,30 +130,45 @@ Each row is one user. Shows licensing status.
 
 ---
 
-## Troubleshooting- 
+## Troubleshooting
 
 **"Python was not found"**
 Python is not on your PATH. Reinstall Python and check "Add Python to environment variables" during setup.
 
-**"No module named 'pandas'"**
-Run `python -m pip install pandas openpyxl` to install the required libraries.
+**"No module named 'pandas'" or similar**
+Run `python -m pip install pandas openpyxl requests python-dotenv` to install the required libraries.
 
-**"Could not find a file starting with..."**
-The tool cannot find one of the required export files. Make sure the file is in the same folder as the script and its name starts with the expected prefix.
+**"Authentication failed"**
+Your credentials in the `.env` file are incorrect or the Client Secret has expired. Check the values and contact your administrator to generate a new secret if needed.
 
-**"No CSV files found in 'purview/' folder"**
-Create a folder called `purview` in the same directory as the script and place your Purview export CSVs inside it.
+**"ERROR: Failed to fetch report"**
+The API permissions may not be granted. Contact your administrator to confirm `Reports.Read.All` and `AuditLogsQuery.Read.All` have admin consent in Entra ID.
 
 **Blank file sizes in the activity log**
 This is a Microsoft limitation. Purview does not include file size data for all operation types. File sizes are most consistently available for FileUploaded and FileModified actions.
+
+**Tool takes longer than expected**
+Purview audit log searches run on Microsoft's servers and typically take 1–2 hours. This is normal. Do not close the terminal or let the computer sleep while the tool is running.
+
+---
+
+## Credentials — For New Users
+
+If you need to run this tool and don't have a `.env` file:
+
+1. Go to **entra.microsoft.com** → App registrations → Licensing and SharePoint Audit Tool
+2. Under **Certificates & secrets**, click **New client secret**
+3. Copy the **Value** immediately — it only shows once
+4. Create a `.env` file with your Tenant ID, Client ID, and the new Client Secret
+5. The Tenant ID and Client ID are visible on the app registration overview page
 
 ---
 
 ## Permissions Required
 
-To export the data, you need:
+The app registration requires the following Microsoft Graph application permissions with admin consent:
 
-- **M365 Admin Center exports**: Global Reader + Reports Reader roles in Entra ID
-- **Purview audit log exports**: View-Only Audit Logs role (or equivalent) in the compliance portal
+- `Reports.Read.All` — reads M365 usage reports
+- `AuditLogsQuery.Read.All` — searches Purview audit logs
 
-If you cannot access either portal, contact your Entra ID administrator.
+Contact your Entra ID administrator if these are not already configured.
