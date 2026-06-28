@@ -53,8 +53,8 @@ Your IT administrator can provide these values from the app registration in Micr
    Authentication successful!
 
    Fetching M365 reports...
-     Fetched getOffice365ActiveUserDetail: 271 rows
-     Fetched getSharePointSiteUsageDetail: 222 rows
+     Fetched getOffice365ActiveUserDetail: x amount rows
+     Fetched getSharePointSiteUsageDetail: x amount of rows
 
    Fetching Purview audit logs (monthly intervals)...
      Created search: May 29 - Jun 28 SharePoint
