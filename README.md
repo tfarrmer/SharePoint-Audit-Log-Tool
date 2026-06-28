@@ -4,8 +4,9 @@ A Python-based audit tool that tracks Microsoft 365 licensing and SharePoint sto
 
 ## What It Does
 
+- Authenticates to Microsoft Graph API via OAuth 2.0 and pulls all data automatically — no manual exports required
 - Identifies all licensed M365 users and their SharePoint/Teams license status
-- Reports per-user SharePoint file activity — uploads, modifications, deletions — over a 6-month window
+- Reports per-user SharePoint file activity — uploads, modifications, deletions — over a rolling 30-day window
 - Calculates total upload volume per user from Purview audit log data
 - Combines licensing, storage, and activity data into a single Excel report
 
@@ -24,74 +25,82 @@ The tool generates `M365_Audit_Report.xlsx` with three tabs:
 - Python 3.10+
 - pandas
 - openpyxl
+- requests
+- python-dotenv
 
 Install dependencies:
 ```bash
-python -m pip install pandas openpyxl
+python -m pip install pandas openpyxl requests python-dotenv
 ```
 
-## Usage
+## Setup
 
-### 1. Export your data
+### 1. Configure credentials
 
-**From admin.microsoft.com → Reports → Usage:**
-- Office 365 Active User Detail (Services → Active Users tab → Export)
-- SharePoint Site Usage Detail (SharePoint site usage → Export at bottom left)
-
-**From compliance.microsoft.com → Audit:**
-- Run 6 monthly searches (1-month intervals) with SharePoint workload filter
-- Export each as a CSV
-
-### 2. Set up your folder
+Create a `.env` file in the project folder:
 
 ```
-project/
-├── audit_final.py
-├── Office365ActiveUserDetail[timestamp].xlsx
-├── SharePointSiteUsageDetail[timestamp].csv
-└── purview/
-    ├── month1.csv
-    ├── month2.csv
-    └── ...
+TENANT_ID=your-tenant-id
+CLIENT_ID=your-client-id
+CLIENT_SECRET=your-client-secret
 ```
 
-No renaming required — the script auto-detects files by prefix.
+These credentials come from an app registration in Microsoft Entra ID with the following permissions:
+- `Reports.Read.All` (Microsoft Graph, Application)
+- `AuditLogsQuery.Read.All` (Microsoft Graph, Application)
 
-### 3. Run the tool
+Both permissions require admin consent from a tenant administrator.
+
+### 2. Run the tool
 
 ```bash
 python audit_final.py
 ```
 
-The report saves to the same folder as the script.
+The tool will:
+1. Authenticate to Microsoft Graph API
+2. Pull Office 365 Active User Detail and SharePoint Site Usage reports
+3. Run a Purview audit log search for the past 30 days (SharePoint file activity)
+4. Generate `M365_Audit_Report.xlsx` in the same folder
 
 ## Architecture
 
 ```
-audit_final.py          # Core logic — file detection, data processing, report generation
-.gitignore              # Prevents CSV/XLSX data files from being committed
-TOOL_GUIDE.md           # End-user instructions for running the tool
+audit_final.py      # Core logic — data processing and report generation
+data_fetcher.py     # API layer — authenticates and pulls all three data sources
+.env                # Credentials (excluded from git)
+.gitignore          # Prevents sensitive files from being committed
+TOOL_GUIDE.md       # End-user instructions
 ```
 
 ### Data flow
 
-1. **Office 365 Active User Detail** → licensing status and last activity dates per service
-2. **SharePoint Site Usage Detail** → storage per site and site ownership
-3. **Purview Audit Logs** → individual file operations parsed from JSON AuditData field
-4. **pandas** → cross-references and merges all three sources on user email (UPN)
-5. **openpyxl** → formats and outputs the final Excel report
+1. **data_fetcher.py** authenticates via OAuth 2.0 client credentials flow
+2. **Graph Reports API** → Office 365 Active User Detail + SharePoint Site Usage Detail
+3. **Purview Audit Search API** → SharePoint file activity logs (paginated, handles token refresh automatically)
+4. **audit_final.py** normalizes and merges all three sources on user email (UPN)
+5. **openpyxl** formats and outputs the final Excel report
 
-### Purview chunking
+### Key engineering decisions
 
-Purview times out on large date ranges. The tool is designed to accept multiple monthly CSV exports from the `purview/` folder, which are combined automatically at runtime.
-
+- **Monthly chunking:** Purview times out on large date ranges. The tool searches in 1-month intervals and polls all searches simultaneously, reducing wait time from sequential hours to the duration of the longest single search.
+- **Automatic token refresh:** Microsoft Graph access tokens expire after 1 hour. The tool detects 401 errors and re-authenticates automatically without interrupting long-running searches.
+- **Pagination:** The Purview API returns results in pages of 150 records. The tool fetches all pages automatically, bypassing the 50,000-row cap of manual CSV exports.
+- **Retry logic:** 429 (rate limit) and 504 (server timeout) errors are caught and retried automatically with a delay.
 
 ## Security Notes
 
 - No API keys or credentials in this repository
 - All CSV/XLSX data files are excluded via `.gitignore`
+- `.env` file is excluded from version control
+- Each user should create their own client secret under the shared app registration
 
+## Phase 3 (Planned)
+
+- tkinter GUI with report destination picker
+- Standalone `.exe` packaging via PyInstaller
+- Windows Task Scheduler integration for monthly automated runs
 
 ## Author
 
-Travis Farmer - Comp Sci Student @ Georgia State University and IT Intern @ Axion BioSystems
+Travis Farmer — CS Student @ Georgia State University | IT Intern @ Axion BioSystems
