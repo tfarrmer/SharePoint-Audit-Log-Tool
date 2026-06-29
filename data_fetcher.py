@@ -150,6 +150,10 @@ def fetch_audit_records(token, query_id, search_name):
 
     while url:
         response = _api("get", url)
+        if response.status_code in (429, 504):
+            print(f"  ERROR: {response.status_code} on page {page}, retrying in 30s...")
+            time.sleep(30)
+            continue
         if response.status_code != 200:
             print(f"  ERROR: Failed to fetch records for '{search_name}' ({response.status_code})")
             print(f"  {response.text[:500]}")
