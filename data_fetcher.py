@@ -1,5 +1,6 @@
 #Import and credentials setup
 import os
+import base64
 import time
 import requests
 import pandas as pd
@@ -12,6 +13,8 @@ load_dotenv()
 TENANT_ID = os.getenv("TENANT_ID")
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
 
 GRAPH_BASE = "https://graph.microsoft.com"
 _current_token = None
@@ -234,6 +237,56 @@ def fetch_purview_audit_logs(token, months_back=1):
 
     print(f"\nTotal Purview records fetched: {len(all_records)}")
     return all_records
+
+
+def send_report_email(report_path):
+    """Email the finished report via Microsoft Graph sendMail. Returns True on success."""
+    sender = SENDER_EMAIL
+    recipient = RECIPIENT_EMAIL
+
+    if not sender or not recipient:
+        print("ERROR: SENDER_EMAIL and RECIPIENT_EMAIL must be set in .env to send the report.")
+        return False
+
+    print(f"Sending report to {recipient}...")
+
+    try:
+        with open(report_path, "rb") as f:
+            content_bytes = base64.b64encode(f.read()).decode("utf-8")
+    except OSError as exc:
+        print(f"ERROR: Could not read report file: {exc}")
+        return False
+
+    subject = f"M365 SharePoint Audit Report — {datetime.now().strftime('%B %Y')}"
+    payload = {
+        "message": {
+            "subject": subject,
+            "body": {
+                "contentType": "Text",
+                "content": "Please find attached the monthly M365 SharePoint audit report.",
+            },
+            "toRecipients": [{"emailAddress": {"address": recipient}}],
+            "attachments": [
+                {
+                    "@odata.type": "#microsoft.graph.fileAttachment",
+                    "name": "M365_Audit_Report.xlsx",
+                    "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "contentBytes": content_bytes,
+                }
+            ],
+        }
+    }
+
+    url = f"{GRAPH_BASE}/v1.0/users/{sender}/sendMail"
+    response = _api("post", url, headers={"Content-Type": "application/json"}, json=payload)
+
+    if response.status_code == 202:
+        print("Report sent successfully.")
+        return True
+
+    print(f"ERROR: Failed to send email ({response.status_code})")
+    print(response.text[:500])
+    return False
 
 
 #fetch everything

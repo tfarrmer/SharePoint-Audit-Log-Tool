@@ -4,6 +4,7 @@ import subprocess
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
+from data_fetcher import send_report_email
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPORT_PATH = os.path.join(SCRIPT_DIR, "M365_Audit_Report.xlsx")
@@ -166,8 +167,16 @@ class AuditApp:
             process.wait()
 
             if process.returncode == 0:
-                self.root.after(0, self._set_status, "Done!", "black", 100)
                 self.root.after(0, self.path_var.set, f"Report saved to: {REPORT_PATH}")
+                self.root.after(0, self._set_status, "Sending report...", "black", 95)
+                self.root.after(0, self._append_log, "\nSending report via email...\n")
+                sent = send_report_email(REPORT_PATH)
+                if sent:
+                    self.root.after(0, self._append_log, "Report sent successfully.\n")
+                    self.root.after(0, self._set_status, "Done! Report sent.", "black", 100)
+                else:
+                    self.root.after(0, self._append_log, "Email failed — check log above for details.\n")
+                    self.root.after(0, self._set_status, "Done! (Email failed.)", "black", 100)
             else:
                 tail = "\n".join(output_lines[-15:]) or "(no output captured)"
                 self.root.after(0, self._set_status, "Error.", "red", self.progress["value"])
