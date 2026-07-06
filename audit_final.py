@@ -1,9 +1,9 @@
 import pandas as pd
 import json
-from openpyxl import load_workbook
+from openpyxl import load_workbook #opens an existing Excel file so you can apply formatting to it
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from data_fetcher import fetch_all
+from data_fetcher import fetch_all #connects the two files
 
 OUTPUT_FILE = "M365_Audit_Report.xlsx"
 

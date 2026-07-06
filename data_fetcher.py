@@ -1,12 +1,12 @@
 #Import and credentials setup
-import os
-import base64
-import time
-import requests
-import pandas as pd
-from io import StringIO
-from datetime import datetime, timedelta, timezone
-from dotenv import load_dotenv
+import os # lets Python interact with the operating system. 
+import base64 # used to encode the Excel file into text before attaching it to an email. Email APIs can't send raw binary files, so you convert them to base64 text first
+import time #gives access to time.sleep() which pauses the script for a set number of seconds. Used when waiting between retries and polling
+import requests #the library that makes HTTP requests to Microsoft's API. Without this, the script can't talk to the internet
+import pandas as pd #data manipulation library. Used to turn CSV responses from the API into DataFrames
+from io import StringIO #lets you treat a string of text as if it were a file. Microsoft's reports API returns CSV text, and pandas needs a file-like object to read it
+from datetime import datetime, timedelta, timezone #datetime handles dates and times, timedelta calculates time differences (like "30 days ago"), timezone ensures dates are in UTC format which Microsoft requires
+from dotenv import load_dotenv #reads your .env file and loads the credentials into the environment
 
 load_dotenv()
 
@@ -16,7 +16,7 @@ CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
 
-GRAPH_BASE = "https://graph.microsoft.com"
+GRAPH_BASE = "https://graph.microsoft.com" # a constant string storing the base URL for all Microsoft Graph API calls. Defined once so you never hardcode the URL in multiple places
 _current_token = None
 
 
@@ -31,14 +31,14 @@ def get_access_token():
             "grant_type": "client_credentials"
         }
     )
-    if response.status_code != 200:
+    if response.status_code != 200: #an integer representing the HTTP response code. 200 means success, anything else means failure
         print(f"ERROR: Authentication failed ({response.status_code})")
         print(response.json().get("error_description", ""))
         exit(1)
     return response.json()["access_token"]
 
 
-def _api(method, url, **kwargs):
+def _api(method, url, **kwargs): #Helper function. It wraps every API call so you don't repeat authentication logic everywhere
     """Make an authenticated API request, refreshing the token once on 401."""
     global _current_token
     if _current_token is None:
@@ -46,7 +46,7 @@ def _api(method, url, **kwargs):
     headers = kwargs.pop("headers", {})
     headers["Authorization"] = f"Bearer {_current_token}"
     response = getattr(requests, method)(url, headers=headers, **kwargs)
-    if response.status_code == 401:
+    if response.status_code == 401: #401 means Unauthorized. The token expired. Get a new one and retry once
         print("  Token expired, refreshing...")
         _current_token = get_access_token()
         headers["Authorization"] = f"Bearer {_current_token}"
@@ -97,15 +97,15 @@ def create_audit_search(token, start_date, end_date, search_name):
         ]
     }
 
-    for attempt in range(3):
+    for attempt in range(3): #tries up to 3 times
         response = _api("post", url, headers={"Content-Type": "application/json"}, json=body)
-        if response.status_code in (429, 504):
+        if response.status_code in (429, 504): #429 means rate limited, 504 means server timeout
             print(f"  Rate limited or timeout ({response.status_code}), retrying in 60s... (attempt {attempt + 1}/3)")
-            time.sleep(60)
+            time.sleep(60) #pauses 60 seconds before retrying
             continue
         break
 
-    if response.status_code in (200, 201):
+    if response.status_code in (200, 201): #200 means OK, 201 means Created. Both indicate success
         query = response.json()
         print(f"  Created search: {search_name} (ID: {query['id']})")
         return query["id"]
@@ -115,18 +115,18 @@ def create_audit_search(token, start_date, end_date, search_name):
         return None
     
 
-def poll_audit_search(token, query_id, search_name, poll_interval=30, max_wait=10800):
+def poll_audit_search(token, query_id, search_name, poll_interval=30, max_wait=10800): #checks every 30 seconds and will give up after 3 hours by default
     """Poll a Purview audit search until it completes."""
     url = f"{GRAPH_BASE}/beta/security/auditLog/queries/{query_id}"
 
     elapsed = 0
-    while elapsed < max_wait:
+    while elapsed < max_wait: #keeps it running as long as we have exceeded 10800 seconds (3 hours)
         response = _api("get", url)
         if response.status_code != 200:
             print(f"  ERROR: Failed to check status for '{search_name}' ({response.status_code})")
             return False
 
-        status = response.json().get("status", "")
+        status = response.json().get("status", "") #safely gets the status field from the response. If status doesn't exist, returns an empty string "" instead of crashing
 
         if status == "succeeded":
             print(f"  Search '{search_name}' completed")
@@ -148,7 +148,7 @@ def fetch_audit_records(token, query_id, search_name):
     """Fetch all records from a completed audit search."""
     url = f"{GRAPH_BASE}/beta/security/auditLog/queries/{query_id}/records"
 
-    all_records = []
+    all_records = [] #an empty list that accumulates all records across pages
     page = 1
 
     while url:
@@ -191,7 +191,7 @@ def fetch_purview_audit_logs(token, months_back=1):
         query_id = create_audit_search(token, month_start, month_end, search_name)
         if query_id:
             searches.append((query_id, search_name))
-        time.sleep(15)
+        time.sleep(15) #waits 15 seconds between creating searches to avoid rate limiting
 
     if not searches:
         print("ERROR: No audit searches were created successfully.")
@@ -280,7 +280,7 @@ def send_report_email(report_path):
     url = f"{GRAPH_BASE}/v1.0/users/{sender}/sendMail"
     response = _api("post", url, headers={"Content-Type": "application/json"}, json=payload)
 
-    if response.status_code == 202:
+    if response.status_code == 202: #202 means "Accepted." Microsoft uses 202 (not 200) for successful email sends
         print("Report sent successfully.")
         return True
 
