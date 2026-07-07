@@ -201,8 +201,10 @@ def fetch_purview_audit_logs(token, months_back=1):
     print("\n  Polling all searches simultaneously...")
     pending = list(searches)
     completed = []
+    poll_start = time.time()
+    max_poll_seconds = 10800  # 3 hours max
 
-    while pending:
+    while pending and (time.time() - poll_start) < max_poll_seconds:
         still_pending = []
         for query_id, search_name in pending:
             url = f"{GRAPH_BASE}/beta/security/auditLog/queries/{query_id}"
@@ -228,6 +230,9 @@ def fetch_purview_audit_logs(token, months_back=1):
         if pending:
             print(f"  {len(pending)} searches still running — waiting 30s...")
             time.sleep(30)
+
+    if pending:
+        print(f"  WARNING: {len(pending)} searches did not complete within 3 hours — skipping.")
 
     # Fetch results from all completed searches
     for query_id, search_name in completed:
