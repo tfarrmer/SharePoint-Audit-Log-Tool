@@ -70,27 +70,28 @@ def parse_audit_data(audit_json):
             "File Size (Bytes)": None
         })
 
-parsed = purview_filtered["AuditData"].apply(parse_audit_data)
-purview_filtered = purview_filtered.reset_index(drop=True)
-parsed = parsed.reset_index(drop=True)
+if purview_filtered.empty:
+    activity_log = pd.DataFrame(columns=["Date/Time", "User", "Action", "File Name",
+                                          "File Extension", "Folder Path", "Site URL",
+                                          "File Size (Bytes)", "File Size (MB)"])
+else:
+    parsed = purview_filtered["AuditData"].apply(parse_audit_data)
+    purview_filtered = purview_filtered.reset_index(drop=True)
+    parsed = parsed.reset_index(drop=True)
 
-# Build the File Activity Log tab
-activity_log = pd.DataFrame({
-    "Date/Time": pd.to_datetime(purview_filtered["CreationDate"].str.strip(), utc=True).dt.tz_localize(None),
-    "User": purview_filtered["UserId"],
-    "Action": purview_filtered["Operation"],
-    "File Name": parsed["File Name"],
-    "File Extension": parsed["File Extension"],
-    "Folder Path": parsed["Folder Path"],
-    "Site URL": parsed["Site URL"],
-    "File Size (Bytes)": pd.to_numeric(parsed["File Size (Bytes)"], errors="coerce"),
-})
+    activity_log = pd.DataFrame({
+        "Date/Time": pd.to_datetime(purview_filtered["CreationDate"].str.strip(), utc=True).dt.tz_localize(None),
+        "User": purview_filtered["UserId"],
+        "Action": purview_filtered["Operation"],
+        "File Name": parsed["File Name"],
+        "File Extension": parsed["File Extension"],
+        "Folder Path": parsed["Folder Path"],
+        "Site URL": parsed["Site URL"],
+        "File Size (Bytes)": pd.to_numeric(parsed["File Size (Bytes)"], errors="coerce"),
+    })
 
-# Add readable file size column
-activity_log["File Size (MB)"] = (activity_log["File Size (Bytes)"] / (1024**2)).round(2)
-
-# Sort by most recent first
-activity_log = activity_log.sort_values("Date/Time", ascending=False).reset_index(drop=True)
+    activity_log["File Size (MB)"] = (activity_log["File Size (Bytes)"] / (1024**2)).round(2)
+    activity_log = activity_log.sort_values("Date/Time", ascending=False).reset_index(drop=True)
 
 # --- Build Tab 1: User Summary ---
 print("Building User Summary tab...")
@@ -128,11 +129,16 @@ def purview_user_stats(group):
         ),
     })
 
-purview_by_user = activity_log.groupby("User").apply(purview_user_stats).reset_index()
-purview_by_user = purview_by_user.rename(columns={"User": "User Principal Name"})
-purview_by_user[["Files Uploaded", "Files Modified", "Files Deleted", "Total Actions"]] = (
-    purview_by_user[["Files Uploaded", "Files Modified", "Files Deleted", "Total Actions"]].astype(int)
-)
+if activity_log.empty:
+    purview_by_user = pd.DataFrame(columns=["User Principal Name", "Files Uploaded",
+                                             "Files Modified", "Files Deleted",
+                                             "Total Actions", "Total Upload Volume (MB)"])
+else:
+    purview_by_user = activity_log.groupby("User").apply(purview_user_stats).reset_index()
+    purview_by_user = purview_by_user.rename(columns={"User": "User Principal Name"})
+    purview_by_user[["Files Uploaded", "Files Modified", "Files Deleted", "Total Actions"]] = (
+        purview_by_user[["Files Uploaded", "Files Modified", "Files Deleted", "Total Actions"]].astype(int)
+    )
 
 # Merge everything
 user_summary = user_names.merge(sp_license_info, on="User Principal Name", how="left")
