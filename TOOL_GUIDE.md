@@ -8,7 +8,7 @@ This tool automatically pulls data from Microsoft 365 via API and generates a si
 - **File Activity Log** — a detailed log of every file upload, modification, deletion, move, and rename across SharePoint over the past 30 days
 - **All Licensed Users** — shows every user's Microsoft 365 license assignments for SharePoint and Teams, along with their last activity dates
 
-No manual exports required. The tool pulls everything automatically.
+No manual exports required. The tool pulls everything automatically and emails the report when complete.
 
 ---
 
@@ -28,51 +28,64 @@ python -m pip install pandas openpyxl requests python-dotenv
 
 ### 3. Create your credentials file
 
-Create a file called `.env` in the same folder as the tool with the following:
+Copy `.env.example` to a new file called `.env` in the same folder as the tool and fill in your values:
 
 ```
 TENANT_ID=your-tenant-id
 CLIENT_ID=your-client-id
 CLIENT_SECRET=your-client-secret
+SENDER_EMAIL=it@yourcompany.com
+RECIPIENT_EMAIL=recipient@yourcompany.com
 ```
 
-Your IT administrator can provide these values from the app registration in Microsoft Entra ID. Each person running the tool should have their own Client Secret — contact your administrator to generate one.
+Your IT administrator can provide the Tenant ID, Client ID, and a Client Secret from the app registration in Microsoft Entra ID. Each person running the tool should have their own Client Secret.
 
 ---
 
 ## How to Run the Tool
 
-1. Open a terminal in the project folder
-2. Run:
-   ```
-   python audit_final.py
-   ```
-3. The tool will print its progress as it runs:
-   ```
-   Authenticating...
-   Authentication successful!
+**Option 1 — GUI (recommended, no terminal needed):**
 
-   Fetching M365 reports...
-     Fetched getOffice365ActiveUserDetail: x amount rows
-     Fetched getSharePointSiteUsageDetail: x amount of rows
+Double-click `audit_gui.exe` if you have the packaged version, or run:
+```
+python audit_gui.py
+```
 
-   Fetching Purview audit logs (monthly intervals)...
-     Created search: May 29 - Jun 28 SharePoint
-     Polling all searches simultaneously...
-     ✓ 'May 29 - Jun 28 SharePoint' completed
-     Fetching records...
+Click **Generate Report**. The tool will show live progress in the log window and email the report automatically when done.
 
-   Parsing API audit records...
-   Building User Summary tab...
-   Building Licensed Users tab...
-   Writing report...
-   Formatting...
+**Option 2 — Command line:**
+```
+python audit_final.py
+```
 
-   Done! Report saved to: M365_Audit_Report.xlsx
-   ```
-4. Open `M365_Audit_Report.xlsx` in Excel — your report is ready
+The tool will print its progress as it runs:
+```
+Authenticating...
+Authentication successful!
 
-The tool typically takes **1–2 hours** to complete due to the time required for Purview audit log searches to process on Microsoft's servers.
+Fetching M365 reports...
+  Fetched getOffice365ActiveUserDetail: 271 rows
+  Fetched getSharePointSiteUsageDetail: 222 rows
+
+Fetching Purview audit logs (monthly intervals)...
+  Created search: Jun 07 - Jul 07 SharePoint
+  Polling all searches simultaneously...
+  ✓ 'Jun 07 - Jul 07 SharePoint' completed
+  Fetching records...
+
+Parsing API audit records...
+Building User Summary tab...
+Building Licensed Users tab...
+Writing report...
+Formatting...
+
+Done! Report saved to: M365_Audit_Report.xlsx
+
+Sending report to recipient@yourcompany.com...
+Report sent successfully.
+```
+
+The tool typically takes **1–2.5 hours** to complete due to the time required for Purview audit log searches to process on Microsoft's servers. **Run it in the evening or overnight for best results** — Microsoft's servers process searches faster during off-peak hours.
 
 ---
 
@@ -142,13 +155,19 @@ Run `python -m pip install pandas openpyxl requests python-dotenv` to install th
 Your credentials in the `.env` file are incorrect or the Client Secret has expired. Check the values and contact your administrator to generate a new secret if needed.
 
 **"ERROR: Failed to fetch report"**
-The API permissions may not be granted. Contact your administrator to confirm `Reports.Read.All` and `AuditLogsQuery.Read.All` have admin consent in Entra ID.
+The API permissions may not be granted. Contact your administrator to confirm `Reports.Read.All`, `AuditLogsQuery.Read.All`, and `Mail.Send` have admin consent in Entra ID.
+
+**File Activity Log tab is empty**
+The Purview search timed out after 3 hours without completing. This is a Microsoft server-side issue. Re-run the tool, preferably in the evening or overnight when servers are less loaded. The rest of the report (User Summary and All Licensed Users) is still accurate.
 
 **Blank file sizes in the activity log**
 This is a Microsoft limitation. Purview does not include file size data for all operation types. File sizes are most consistently available for FileUploaded and FileModified actions.
 
 **Tool takes longer than expected**
-Purview audit log searches run on Microsoft's servers and typically take 1–2 hours. This is normal. Do not close the terminal or let the computer sleep while the tool is running.
+Purview audit log searches run on Microsoft's servers and typically take 1–2 hours. This is normal. Do not close the terminal or let the computer sleep while the tool is running. For best results, run it after business hours.
+
+**Email not received**
+Check that `SENDER_EMAIL` and `RECIPIENT_EMAIL` are correctly set in your `.env` file. Confirm the `Mail.Send` permission has admin consent in Entra ID. Check your spam folder.
 
 ---
 
@@ -158,9 +177,10 @@ If you need to run this tool and don't have a `.env` file:
 
 1. Go to **entra.microsoft.com** → App registrations → Licensing and SharePoint Audit Tool
 2. Under **Certificates & secrets**, click **New client secret**
-3. Copy the **Value** immediately — it only shows once
-4. Create a `.env` file with your Tenant ID, Client ID, and the new Client Secret
-5. The Tenant ID and Client ID are visible on the app registration overview page
+3. Give it a description and set expiration to 24 months
+4. Copy the **Value** immediately — it only shows once
+5. Create a `.env` file using `.env.example` as a template
+6. The Tenant ID and Client ID are visible on the app registration overview page
 
 ---
 
@@ -170,5 +190,6 @@ The app registration requires the following Microsoft Graph application permissi
 
 - `Reports.Read.All` — reads M365 usage reports
 - `AuditLogsQuery.Read.All` — searches Purview audit logs
+- `Mail.Send` — sends the report via email
 
 Contact your Entra ID administrator if these are not already configured.
