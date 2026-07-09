@@ -295,7 +295,7 @@ def send_report_email(report_path):
 
 
 #fetch everything
-def fetch_all():
+def fetch_all(log=print):
     """Authenticate and fetch all three data sources."""
     print("Authenticating...")
     token = get_access_token()
