@@ -5,19 +5,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 from data_fetcher import send_report_email
-#from audit_final import run_audit
-
-
-import time
-def run_audit():
-    print("Authenticating...")
-    time.sleep(1)
-    print("Fetching Purview audit logs...")
-    time.sleep(1)
-    print("Building report...")
-    time.sleep(1)
-    print("Done! Report saved to: fake_report.xlsx")
-    return "fake_report.xlsx"
+from audit_final import run_audit
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPORT_PATH = os.path.join(SCRIPT_DIR, "M365_Audit_Report.xlsx")
