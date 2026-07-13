@@ -167,7 +167,7 @@ def fetch_audit_records(token, query_id, search_name):
 
         connection_retries = 0  # reset after a successful request
 
-        if response.status_code in (429, 504):
+        if response.status_code in (429, 502, 503, 504):
             print(f"  ERROR: {response.status_code} on page {page}, retrying in 30s...")
             time.sleep(30)
             continue
