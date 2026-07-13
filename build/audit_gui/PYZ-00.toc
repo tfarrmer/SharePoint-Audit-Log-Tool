@@ -692,6 +692,7 @@
   ('asyncio.windows_utils',
    'C:\\Users\\TravisFarmer\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\windows_utils.py',
    'PYMODULE'),
+  ('audit_final', 'C:\\VSCode\\Audit Tool\\audit_final.py', 'PYMODULE'),
   ('base64',
    'C:\\Users\\TravisFarmer\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\base64.py',
    'PYMODULE'),
