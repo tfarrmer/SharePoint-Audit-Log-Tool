@@ -1,10 +1,11 @@
 import os
+import io
 import sys
-import subprocess
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 from data_fetcher import send_report_email
+from audit_final import run_audit
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPORT_PATH = os.path.join(SCRIPT_DIR, "M365_Audit_Report.xlsx")
@@ -128,68 +129,72 @@ class AuditApp:
             text, pct, _ = STAGES[new_stage]
             self.root.after(0, self._set_status, text, "black", pct)
 
+        first_line = True
+
+        def handle_line(line: str):
+            nonlocal first_line
+            self.root.after(0, self._append_log, line + "\n")
+
+            stripped = line.strip()
+            if not stripped:
+                return
+            output_lines.append(stripped)
+
+            if first_line:
+                first_line = False
+                advance(1)
+
+            lower = stripped.lower()
+            if stage < 2 and STAGES[2][2] and any(k in lower for k in STAGES[2][2]):
+                advance(2)
+            if stage < 3 and STAGES[3][2] and any(k in lower for k in STAGES[3][2]):
+                advance(3)
+
+        class _StreamToLog(io.TextIOBase):
+            """Catches print() output from run_audit() and feeds it to the log box."""
+            def __init__(self, on_line):
+                self.on_line = on_line
+                self._buffer = ""
+
+            def write(self, text):
+                self._buffer += text
+                while "\n" in self._buffer:
+                    line, self._buffer = self._buffer.split("\n", 1)
+                    self.on_line(line)
+                return len(text)
+
+            def flush(self):
+                pass
+
+        old_stdout = sys.stdout
+        sys.stdout = _StreamToLog(handle_line)
+
         try:
-            env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
-            process = subprocess.Popen(
-                [sys.executable, "-u", "audit_final.py"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                bufsize=1,
-                cwd=SCRIPT_DIR,
-                env=env,
-            )
+            try:
+                report_path = run_audit()
+            finally:
+                sys.stdout = old_stdout
 
-            first_line = True
-            for raw_line in process.stdout:
-                # Stream every line to the log box as-is (preserves spacing/symbols)
-                self.root.after(0, self._append_log, raw_line)
-
-                line = raw_line.strip()
-                if not line:
-                    continue
-                output_lines.append(line)
-
-                if first_line:
-                    first_line = False
-                    advance(1)
-
-                lower = line.lower()
-
-                if stage < 2 and STAGES[2][2] and any(k in lower for k in STAGES[2][2]):
-                    advance(2)
-
-                if stage < 3 and STAGES[3][2] and any(k in lower for k in STAGES[3][2]):
-                    advance(3)
-
-            process.wait()
-
-            if process.returncode == 0:
-                self.root.after(0, self.path_var.set, f"Report saved to: {REPORT_PATH}")
-                self.root.after(0, self._set_status, "Sending report...", "black", 95)
-                self.root.after(0, self._append_log, "\nSending report via email...\n")
-                sent = send_report_email(REPORT_PATH)
-                if sent:
-                    self.root.after(0, self._append_log, "Report sent successfully.\n")
-                    self.root.after(0, self._set_status, "Done! Report sent.", "black", 100)
-                else:
-                    self.root.after(0, self._append_log, "Email failed — check log above for details.\n")
-                    self.root.after(0, self._set_status, "Done! (Email failed.)", "black", 100)
+            self.root.after(0, self.path_var.set, f"Report saved to: {report_path}")
+            self.root.after(0, self._set_status, "Sending report...", "black", 95)
+            self.root.after(0, self._append_log, "\nSending report via email...\n")
+            sent = send_report_email(report_path)
+            if sent:
+                self.root.after(0, self._append_log, "Report sent successfully.\n")
+                self.root.after(0, self._set_status, "Done! Report sent.", "black", 100)
             else:
-                tail = "\n".join(output_lines[-15:]) or "(no output captured)"
-                self.root.after(0, self._set_status, "Error.", "red", self.progress["value"])
-                self.root.after(
-                    0,
-                    messagebox.showerror,
-                    "Audit Failed",
-                    f"The audit script exited with an error:\n\n{tail}",
-                )
+                self.root.after(0, self._append_log, "Email failed — check log above for details.\n")
+                self.root.after(0, self._set_status, "Done! (Email failed.)", "black", 100)
 
         except Exception as exc:
-            self.root.after(0, self._set_status, "Error.", "red")
-            self.root.after(0, messagebox.showerror, "Unexpected Error", str(exc))
+            tail = "\n".join(output_lines[-15:]) or "(no output captured)"
+            self.root.after(0,self._set_status, "Error.", "red")
+            self.root.after(
+                0,
+                messagebox.showerror,
+                "Audit Failed",
+                f"The audit script raised an error:\n\n{exc}\n\nLast output:\n{tail}",
+            )
         finally:
             self.root.after(0, self.btn.config, {"state": "normal"})
 

@@ -148,12 +148,26 @@ def fetch_audit_records(token, query_id, search_name):
     """Fetch all records from a completed audit search."""
     url = f"{GRAPH_BASE}/beta/security/auditLog/queries/{query_id}/records"
 
-    all_records = [] #an empty list that accumulates all records across pages
+    all_records = []
     page = 1
+    connection_retries = 0
+    max_connection_retries = 5
 
     while url:
-        response = _api("get", url)
-        if response.status_code in (429, 504):
+        try:
+            response = _api("get", url)
+        except requests.exceptions.RequestException as exc:
+            connection_retries += 1
+            if connection_retries > max_connection_retries:
+                print(f"  ERROR: Connection failed {max_connection_retries} times on page {page}, giving up: {exc}")
+                break
+            print(f"  Connection error on page {page} ({exc}), retrying in 30s... (attempt {connection_retries}/{max_connection_retries})")
+            time.sleep(30)
+            continue
+
+        connection_retries = 0  # reset after a successful request
+
+        if response.status_code in (429, 502, 503, 504):
             print(f"  ERROR: {response.status_code} on page {page}, retrying in 30s...")
             time.sleep(30)
             continue
