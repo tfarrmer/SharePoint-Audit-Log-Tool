@@ -19,3 +19,4 @@ SharePointSiteUsageDetail*
 
 # Claude Code session files
 .claude/
+build/
