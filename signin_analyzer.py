@@ -144,7 +144,44 @@ def detect_brute_force(records):
 
     return flags
 
+def detect_password_spray(records):
+    #Groups failed sign-ins by source IP, checks for many accounts hit lightly within 60 min
+    by_ip = defaultdict(list)
 
+    for r in records:
+        error_code = r.get("status", {}).get("errorCode")
+        if error_code == CREDENTIAL_FAILURE_CODE:
+            ip = r.get("ipAddress", "unknown")
+            upn = r.get("userPrincipalName", "unknown")
+            by_ip[ip].append((_parse_timestamp(r), upn))
+
+    flags = []
+    window = timedelta(minutes=SPRAY_WINDOW_MINUTES)
+
+    for ip, events in by_ip.items():
+        events = sorted(events, key=lambda e: e[0])
+        for i in range(len(events)):
+            window_end = events[i][0] + window
+            in_window = [e for e in events[i:] if e[0] <= window_end]
+
+            per_account_count = defaultdict(int)
+            for _, upn in in_window:
+                per_account_count[upn] += 1
+
+            distinct_accounts = len(per_account_count)
+            max_per_account = max(per_account_count.values()) if per_account_count else 0
+
+            if distinct_accounts >= SPRAY_MIN_ACCOUNTS and max_per_account <= SPRAY_MAX_ATTEMPTS_PER_ACCOUNT:
+                flags.append({
+                    "Source IP": ip,
+                    "Distinct Accounts Targeted": distinct_accounts,
+                    "Max Attempts on Any Single Account": max_per_account,
+                    "Window Start": events[i][0],
+                    "Window End": window_end,
+                })
+                break
+
+    return flags
 
 
 
