@@ -14,9 +14,9 @@ def get_signin_access_token():
     #Authenticcate the signin monitoring app registration 
     response = requests.post(
         f"https://login.microsoftonline.com/{Tenant_ID}/oauth2/v2.0/token",
-        DATA={
+        data={
             "client_id": SIGNIN_CLIENT_ID,
-            "client_secret": SIGNIN_CLIENT_SECRET",
+            "client_secret": SIGNIN_CLIENT_SECRET,
             "scope": "https://graph.microsoft.com/.default",
             "grant_type": "client_credentials"
         }
