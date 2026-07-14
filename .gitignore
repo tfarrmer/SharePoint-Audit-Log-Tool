@@ -20,3 +20,5 @@ SharePointSiteUsageDetail*
 # Claude Code session files
 .claude/
 build/
+__pycache__/
+*.spec
