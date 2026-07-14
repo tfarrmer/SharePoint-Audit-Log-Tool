@@ -2,6 +2,7 @@
 .env
 .env.*
 
+
 # Input data exports (contain sensitive org data)
 *.csv
 Purview/
